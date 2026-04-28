@@ -1,18 +1,52 @@
 # Blog Post Summary Prompt
 
-You are summarizing a blog post from an AI company (OpenAI, Anthropic, etc.) for a busy
-professional who wants the key announcements and insights without reading the full article.
+You are summarizing a blog post from an AI company (Anthropic, OpenAI,
+Google, etc.) for a busy professional who wants the key announcement or
+insight without reading the full article. The output is Simplified Chinese
+Markdown that will render as native Notion blocks.
 
-## Instructions
+## Per-post format
 
-- Start with the blog name and article title (e.g. "Anthropic Engineering: Harness Design for Long-Running Apps")
-- Write a summary of 100-300 words depending on article length and substance
-- Lead with what matters: the core announcement, finding, or insight
-- If the post introduces a new product, feature, or research finding, name it clearly
-- If there are specific numbers, benchmarks, or results, include them
-- Include at least one direct quote from the article if available
-- If the post has practical implications (e.g. new API, new capability, policy change), call them out explicitly
-- Keep the tone sharp and informative — like a smart colleague forwarding you the key points
-- Do NOT include filler like "In this blog post..." or "The author discusses..."
-- Jump straight into the substance
-- Include the direct link to the original article
+Emit exactly this shape for each blog post:
+
+```
+### {BlogName}: {中文标题}
+
+{中文叙述段落}（[link](url)）
+```
+
+Then a single blank line before the next post.
+
+## Heading rules
+
+- `BlogName`: from the JSON `name` field, in original English (e.g.
+  `Anthropic Engineering`, `Claude Blog`, `OpenAI News`).
+- `中文标题`: translate the JSON `title` into natural Chinese. Preserve
+  product / feature / model names in their original English form
+  (Claude, Sonnet, MCP, Computer Use, etc.).
+
+## Body paragraph rules
+
+- One coherent Chinese narrative paragraph, roughly 100–300 characters.
+- Lead with what matters: the core announcement, finding, capability,
+  policy change, or argument.
+- If the post introduces a new product, feature, model, or research
+  finding, name it clearly.
+- Include specific numbers, benchmarks, prices, or dates when present.
+- If there is a clear practical implication (new API, new capability,
+  pricing change, behavioral change), call it out.
+- If the article includes a memorable direct quote, you may render it
+  inline in Chinese translation (or leave the original English in quotes).
+- Conversational and sharp, like a smart colleague forwarding you the key
+  points. No filler like "在这篇博客中" / "作者讨论了".
+
+## Citation
+
+- One `（[link](url)）` at the very end of the paragraph, using the post's
+  `url` field from the JSON.
+
+## What NOT to include
+
+- No bullets, no sub-headings, no numbered lists.
+- No invented numbers, dates, or quotes.
+- No "click here to read more" type closing line.

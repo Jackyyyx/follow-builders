@@ -407,6 +407,55 @@ If delivery fails, show the digest in the terminal as fallback.
 **If "stdout" (default):**
 Just output the digest directly.
 
+**Notion archival (optional, runs alongside any method):**
+If `config.notion.enabled` is true, `deliver.js` also archives the digest as a
+new page in the user's Notion database. This is independent of the primary
+delivery method — the user still gets the digest via Telegram/email/stdout,
+and Notion serves as a persistent archive.
+
+Setup is two pieces:
+1. Add the integration token to `~/.follow-builders/.env`:
+   ```
+   NOTION_API_TOKEN=ntn_...
+   ```
+2. Add the Notion block to `~/.follow-builders/config.json`:
+   ```json
+   "notion": {
+     "enabled": true,
+     "databaseId": "<32-char database id>",
+     "type": "RSS",
+     "titlePrefix": "AI Builders Digest \u2014 "
+   }
+   ```
+
+The page title is `<titlePrefix><YYYY-MM-DD>` in the user's `timezone`. The
+script auto-discovers the database's title and Type/Category select properties,
+so the integration works regardless of whether the property names are in
+English or Chinese ("Type" / "类型" / "类别" / "Category"). The Markdown
+digest produced by the prompts is rendered into native Notion blocks
+(`heading_2` / `heading_3` / `quote` / `divider` / paragraphs with inline
+`[text](url)` links and `**bold**` annotations).
+
+The Notion integration must be invited to the target database first — open
+the database in Notion → ⋯ → "Connections" → add the integration.
+
+**Cron-friendly raw archival (no LLM):**
+When the user wants to skip the LLM remix entirely (cost-free cloud cron, with
+Notion AI handling analysis on the page), pipe `prepare-digest.js` straight
+into `deliver.js --raw`:
+
+```bash
+cd ${CLAUDE_SKILL_DIR}/scripts && node prepare-digest.js | node deliver.js --raw
+```
+
+This dumps the raw feed JSON into Notion as a flat structure (`## X / Twitter`
+/ `## 播客` / `## 博客` sections, `### {Name} (@handle)` per builder, tweet
+bodies as quote blocks, transcripts/blogs as paragraph runs). No prompts, no
+LLM tokens consumed. For automation, see
+`.github/workflows/daily-archive.yml` — fork the repo, set `NOTION_API_TOKEN`
+and `NOTION_DATABASE_ID` secrets, and the workflow runs every day at 06:30 UTC
+(≈ 14:30 Asia/Shanghai), right after the upstream feed-generation cron.
+
 ---
 
 ## Configuration Handling

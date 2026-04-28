@@ -1,0 +1,113 @@
+name: Daily Notion Archive
+
+# Archives the day's raw feed (X / podcasts / blogs) to a Notion database as
+# a single page per day, with no LLM in the loop. The user's Notion AI does
+# the analysis on demand on the page itself, so this workflow consumes zero
+# LLM tokens. See scripts/deliver.js (--raw) for the block layout.
+#
+# ----------------------------------------------------------------------------
+# Setup (one-time, in your fork):
+#   1. Fork `zarazhangrui/follow-builders` to your GitHub account.
+#   2. Create a Notion internal integration at
+#      https://www.notion.so/profile/integrations, copy its token, share your
+#      target database with the integration (database → ⋯ → Connect to → your
+#      integration), and copy the database ID from its URL.
+#   3. In your fork: Settings → Secrets and variables → Actions
+#        Secrets:
+#          NOTION_API_TOKEN     = ntn_...
+#          NOTION_DATABASE_ID   = 32-char ID from the database URL
+#        Variables (optional, defaults shown):
+#          NOTION_TYPE          = RSS
+#          NOTION_TITLE_PREFIX  = "AI Builders Digest — "
+#          USER_TIMEZONE        = Asia/Shanghai
+#   4. Enable Actions on the fork (forks have scheduled workflows disabled
+#      by default — go to Actions tab and click the green "I understand"
+#      button).
+#   5. (Optional) Trigger once manually via "Run workflow" to verify before
+#      letting the cron take over.
+#
+# ----------------------------------------------------------------------------
+# When does this run?
+#   The upstream feed-generation workflow runs at 06:00 UTC daily. We schedule
+#   the archive at 06:30 UTC so it picks up the freshest feed.
+#     06:30 UTC ≈ 14:30 Asia/Shanghai ≈ 02:30 US/Eastern (afternoon) ≈ 07:30
+#     Europe/London. Adjust the cron below if you want a different read time;
+#     GitHub crons are always in UTC and may be delayed up to ~15 min during
+#     load spikes, which is fine for a daily archive.
+#
+#   Common alternatives (uncomment one and remove the default to switch):
+#     '30 6 * * *'    →  fresh, ready by mid-afternoon SHA / morning EU
+#     '0 13 * * *'    →  ready by ~21:00 SHA / 09:00 US-Eastern
+#     '0 22 * * *'    →  ready by ~06:00 SHA next day; uses 16h-old feed
+# ----------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install scripts dependencies
+        run: cd scripts && npm install
+
+      - name: Write user config and env
+        env:
+          NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          NOTION_TYPE: ${{ vars.NOTION_TYPE || 'RSS' }}
+          NOTION_TITLE_PREFIX: ${{ vars.NOTION_TITLE_PREFIX || 'AI Builders Digest — ' }}
+          USER_TIMEZONE: ${{ vars.USER_TIMEZONE || 'Asia/Shanghai' }}
+        run: |
+          if [ -z "$NOTION_API_TOKEN" ]; then
+            echo "::error::NOTION_API_TOKEN secret is not set. See the workflow header for setup instructions."
+            exit 1
+          fi
+          if [ -z "$NOTION_DATABASE_ID" ]; then
+            echo "::error::NOTION_DATABASE_ID secret is not set. See the workflow header for setup instructions."
+            exit 1
+          fi
+          mkdir -p "$HOME/.follow-builders"
+          # Use jq to safely encode user-provided strings (handles em-dashes etc).
+          jq -n \
+            --arg dbid "$NOTION_DATABASE_ID" \
+            --arg type "$NOTION_TYPE" \
+            --arg prefix "$NOTION_TITLE_PREFIX" \
+            --arg tz "$USER_TIMEZONE" \
+            '{
+              language: "zh",
+              timezone: $tz,
+              frequency: "daily",
+              delivery: { method: "stdout" },
+              notion: {
+                enabled: true,
+                databaseId: $dbid,
+                type: $type,
+                titlePrefix: $prefix
+              }
+            }' > "$HOME/.follow-builders/config.json"
+          # .env is consumed via `node --env-file` in the run step below.
+          printf 'NOTION_API_TOKEN=%s\n' "$NOTION_API_TOKEN" > "$HOME/.follow-builders/.env"
+
+      - name: Archive raw feed to Notion
+        run: |
+          cd scripts
+          node prepare-digest.js \
+            | node --env-file="$HOME/.follow-builders/.env" deliver.js --raw \
+            | tee "$RUNNER_TEMP/archive-result.json"
+          # Surface the archived page URL in the run summary.
+          {
+            echo "## Daily Notion archive"
+            echo
+            jq -r '"- **Title**: \(.title)\n- **URL**: \(.url)\n- **Blocks**: \(.blockCount)\n- **Stats**: `\(.stats | tojson)`"' \
+              "$RUNNER_TEMP/archive-result.json"
+          } >> "$GITHUB_STEP_SUMMARY"

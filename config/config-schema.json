@@ -56,6 +56,31 @@
         }
       }
     },
+    "notion": {
+      "type": "object",
+      "description": "Optional Notion archival. When enabled, every successful digest run also creates a new page in the configured Notion database in addition to the primary delivery.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to archive each digest to Notion"
+        },
+        "databaseId": {
+          "type": "string",
+          "description": "Target Notion database ID (32-character UUID, dashes optional)"
+        },
+        "type": {
+          "type": "string",
+          "default": "RSS",
+          "description": "Value to set on the database's Type/Category select property (e.g. RSS)"
+        },
+        "titlePrefix": {
+          "type": "string",
+          "default": "AI Builders Digest \u2014 ",
+          "description": "Prefix for the page title; the local YYYY-MM-DD date is appended"
+        }
+      }
+    },
     "onboardingComplete": {
       "type": "boolean",
       "default": false,
